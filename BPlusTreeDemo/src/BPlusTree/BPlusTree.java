@@ -30,14 +30,7 @@ public class BPlusTree {
         
         installNode(key, value, (LeafNode) node);
         
-        if(((LeafNode) node).getIndexes().size() > max) {
-            if(node instanceof LeafNode) {
-                node = copyUp((LeafNode) node);
-                if(node == getRoot()){
-                    this.setRoot(node);
-                }
-            }
-        }
+        nodeSplit(node);
     }
     
     private LeafNode choiceLeaf(int key, Node node) {
@@ -75,17 +68,92 @@ public class BPlusTree {
         return index;
     }
     
+    private void installNode(int key, Node entry, IndexNode node) {
+        int pos = node.getKeys().size();
+        
+        for (int i = 0; i < node.getKeys().size(); i++) {
+            if(key < node.getKeys().get(i)) {
+                pos = i;
+                break;
+            }
+        }
+        node.getKeys().add(pos, key);
+        ((IndexNode) entry).getEntries().get(1).setParent(node);
+        node.getEntries().add(pos + 1, ((IndexNode) entry).getEntries().get(1));
+    }
+    
+    private void nodeSplit(Node node){
+        if(!checkNodeOverflow(node)){
+            return;
+        }
+        
+        Node parent = node.getParent();
+        
+        Node temp = null;
+        
+        int key = 0;
+        
+        if(node instanceof LeafNode){
+            temp = copyUp((LeafNode) node);
+            key = ((IndexNode) temp).getKeys().get(0);
+        } else {
+            temp = pushUp((IndexNode) node);
+            key = ((IndexNode) temp).getKeys().get(0);
+        }
+        
+        if(parent == null){
+            this.root = temp;
+        } else {
+            installNode(key, temp, (IndexNode) parent);
+            nodeSplit(parent);
+        }
+    }
+    
+    private boolean checkNodeOverflow(Node node){
+        if(node instanceof LeafNode && ((LeafNode) node).getIndexes().size() > max){
+            return true;
+        } else if(node instanceof IndexNode && ((IndexNode) node).getKeys().size() > max) {
+            return true;
+        }
+        
+        return false;
+    }
+    
     private IndexNode copyUp(LeafNode node){
         IndexNode parent = new IndexNode();
         
         LeafNode node2 = new LeafNode();
-        node2.getIndexes().addAll(node.getIndexes().subList(min + 1, max + 1));
+        node2.getIndexes().addAll(node.getIndexes().subList(min, max + 1));
         
         int key = node.getIndexes().get(min).getKey();
         leafNodeList.add(node2);
         
-        for (int i = max - 1; i >= min; i--) {
+        for (int i = max; i >= min; i--) {
             node.getIndexes().remove(i);
+        }
+        
+        node.setParent(parent);
+        node2.setParent(parent);
+        
+        parent.getEntries().add(node);
+        parent.getEntries().add(node2);
+        parent.getKeys().add(key);
+        
+        return parent;
+    }
+    
+    private IndexNode pushUp(IndexNode node){
+        IndexNode parent = new IndexNode();
+        
+        IndexNode node2 = new IndexNode();
+        node2.getKeys().addAll(node.getKeys().subList(min + 1, max + 1));
+        node2.getEntries().addAll(node.getEntries().subList(min, max + 1));
+        
+        int key = node.getKeys().get(min);
+        
+        for (int i = max - 1; i >= min - 1; i--) {
+            node.getKeys().remove(i);
+            node.getEntries().remove(i);
         }
         
         node.setParent(parent);
@@ -189,6 +257,7 @@ abstract class Node {
     private Node parent;
 
     public Node() {
+        this.parent = null;
     }
 
     public Node(Node parent) {
